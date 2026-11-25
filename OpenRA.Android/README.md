@@ -37,6 +37,10 @@ By default the APK is signed with the local .NET Android debug key. See the comm
 `packaging/android/build-apk.sh` for signing with your own key. Never commit a keystore or its passwords.
 The script also copies a versioned APK and its SHA-256 checksum to `release/` for GitHub Releases.
 
+To build a signed release, run `./packaging/android/make-release.sh`. It creates the release key on
+first use (`~/androidra-release.jks`), asks for its password without echoing it and builds the APK.
+Back up the key file: every future update must be signed with the same key.
+
 Release builds use the CoreCLR runtime, which is still experimental on Android. Pass
 `-p:UseMonoRuntime=true` to `build-apk.sh` to build with Mono and full AOT compilation instead.
 
