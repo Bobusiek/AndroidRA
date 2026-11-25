@@ -1,52 +1,36 @@
-# Visual Studio
-Release
+# Build outputs
 bin
 obj
-*.ncb
-*.vcproj*
-*.suo
-*.user
-*.sln.cache
-*.manifest
-*.CodeAnalysisLog.xml
-*.lastcodeanalysissucceeded
-_ReSharper.*/
-/.vs
+Release
 
-# Visual Studio Code
-/.vscode/settings.json
+# Android build outputs (see packaging/android/build-native.sh)
+/OpenRA.Android/libs/
+/OpenRA.Android/java/org/libsdl/
 
-# binaries
+# APK signing keys must never be committed (see packaging/android/build-apk.sh)
+*.keystore
+*.jks
+
+# Downloaded by fetch-geoip.sh
 IP2LOCATION-LITE-DB1.IPV6.BIN.ZIP
 
-# backup files by various editors
+# IDE and editor files
+/.vs
+/.vscode
+.idea
+*.user
+*.suo
+_ReSharper.*/
+*.sublime-project
+*.sublime-workspace
 *~
 *.orig
 \#*
 .*.sw?
-
-# Mac OS X
 .DS_Store
 
-# auto-generated documentation
-DOCUMENTATION.md
-WEAPONS.md
-Lua-API.md
-Settings.md
-*.html
-openra.6
-update.log
-
-# SublimeText
-*.sublime-project
-*.sublime-workspace
-
-# NUnit
+# Test results
 /TestResult.xml
-/lib/
 
-# Support directory
-/Support
-
-# IntelliJ files
-.idea
+# Release files prepared for GitHub Releases (APK, checksums)
+/release/

@@ -250,7 +250,10 @@ namespace OpenRA
 			// - We can remove any fragmentation in the LOH caused by temporary loading garbage.
 			// - A loading screen is visible, so a delay won't matter to the user.
 			//   Much better to clean up now then to drop frames during gameplay for GC pauses.
-			GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+			// The Mono runtime used on Android does not support configuring LOH compaction.
+			if (!OperatingSystem.IsAndroid())
+				GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+
 			GC.Collect();
 
 			// PostLoadComplete is designed for anything that should trigger at the very end of loading.
@@ -462,8 +465,7 @@ namespace OpenRA
 		{
 			var rendererPath = Path.Combine(Platform.BinDir, "OpenRA.Platforms." + platformName + ".dll");
 
-			var loader = new AssemblyLoader(rendererPath);
-			var platformType = loader.LoadDefaultAssembly().GetTypes().SingleOrDefault(t => typeof(IPlatform).IsAssignableFrom(t));
+			var platformType = AssemblyLoader.LoadFileOrBundled(rendererPath).GetTypes().SingleOrDefault(t => typeof(IPlatform).IsAssignableFrom(t));
 
 			if (platformType == null)
 				throw new InvalidOperationException("Platform dll must include exactly one IPlatform implementation.");
@@ -748,6 +750,14 @@ namespace OpenRA
 						Cursor?.Render(Renderer);
 					}
 				}
+
+				// Show the on-screen keyboard (where there is one) while a text field is focused.
+				// Dismissing the keyboard leaves the field, so tapping it again brings the keyboard back.
+				var keyboardFocus = Ui.KeyboardFocusWidget;
+				var wantsTextInput = keyboardFocus != null && keyboardFocus.WantsTextInput;
+				var inputArea = wantsTextInput ? keyboardFocus.RenderBounds : Rectangle.Empty;
+				if (!Renderer.Window.UpdateTextInput(wantsTextInput, inputArea))
+					keyboardFocus?.YieldKeyboardFocus();
 
 				using (new PerfSample("render_flip"))
 					Renderer.EndFrame(new DefaultInputHandler(OrderManager.World));

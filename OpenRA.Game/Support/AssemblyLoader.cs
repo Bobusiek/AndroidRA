@@ -28,6 +28,24 @@ namespace OpenRA.Support
 
 		public Assembly LoadDefaultAssembly() => context.LoadFromAssemblyPath(mainAssembly);
 
+		/// <summary>
+		/// Loads an assembly that is bundled with the application instead of being shipped as a loose file
+		/// (e.g. inside an Android APK). The assembly is resolved by its simple name in the default load context.
+		/// </summary>
+		public static Assembly LoadBundledAssembly(string assemblyFile)
+		{
+			return Assembly.Load(new AssemblyName(Path.GetFileNameWithoutExtension(assemblyFile)));
+		}
+
+		/// <summary>Loads the assembly from disk if it exists, otherwise falls back to the bundled copy.</summary>
+		public static Assembly LoadFileOrBundled(string assemblyFile)
+		{
+			if (!File.Exists(assemblyFile))
+				return LoadBundledAssembly(assemblyFile);
+
+			return new AssemblyLoader(assemblyFile).LoadDefaultAssembly();
+		}
+
 		public AssemblyLoader(string assemblyFile)
 		{
 			mainAssembly = assemblyFile;

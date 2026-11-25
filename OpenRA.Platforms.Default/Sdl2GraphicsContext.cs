@@ -47,6 +47,13 @@ namespace OpenRA.Platforms.Default
 			OpenGL.CheckGLError();
 			OpenGL.glBindVertexArray(vao);
 			OpenGL.CheckGLError();
+
+			// The default viewport matches the drawable size at the time the context was first made current.
+			// On Android this can be smaller than the final fullscreen surface (system bars are still visible
+			// when the surface is created), so set it explicitly. FrameBuffer.Unbind restores this viewport.
+			var surfaceSize = window.SurfaceSize;
+			OpenGL.glViewport(0, 0, surfaceSize.Width, surfaceSize.Height);
+			OpenGL.CheckGLError();
 		}
 
 		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct

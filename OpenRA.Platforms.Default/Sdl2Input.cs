@@ -20,6 +20,9 @@ namespace OpenRA.Platforms.Default
 	{
 		MouseButton lastButtonBits = MouseButton.None;
 
+		// SDL's own touch-to-mouse emulation is disabled on Android (see Sdl2PlatformWindow) in favour of these gestures
+		readonly TouchGestures touchGestures = OperatingSystem.IsAndroid() ? new TouchGestures() : null;
+
 		public static string GetClipboardText() { return SDL.SDL_GetClipboardText(); }
 		public static bool SetClipboardText(string text) { return SDL.SDL_SetClipboardText(text) == 0; }
 
@@ -204,6 +207,34 @@ namespace OpenRA.Platforms.Default
 						break;
 					}
 
+					case SDL.SDL_EventType.SDL_FINGERDOWN:
+					case SDL.SDL_EventType.SDL_FINGERMOTION:
+					case SDL.SDL_EventType.SDL_FINGERUP:
+					{
+						if (touchGestures == null)
+							break;
+
+						if (pendingMotion != null)
+						{
+							inputHandler.OnMouseInput(pendingMotion.Value);
+							pendingMotion = null;
+						}
+
+						// Finger coordinates are normalized to the window surface
+						var surface = device.SurfaceSize;
+						var pos = EventPosition(device, (int)(e.tfinger.x * surface.Width), (int)(e.tfinger.y * surface.Height));
+						var finger = e.tfinger.fingerId;
+
+						if (e.type == SDL.SDL_EventType.SDL_FINGERDOWN)
+							touchGestures.FingerDown(finger, pos, inputHandler, mods);
+						else if (e.type == SDL.SDL_EventType.SDL_FINGERMOTION)
+							touchGestures.FingerMotion(finger, pos, inputHandler, mods);
+						else
+							touchGestures.FingerUp(finger, pos, inputHandler, mods);
+
+						break;
+					}
+
 					case SDL.SDL_EventType.SDL_TEXTINPUT:
 					{
 						var rawBytes = new byte[SDL.SDL_TEXTINPUTEVENT_TEXT_SIZE];
@@ -216,6 +247,11 @@ namespace OpenRA.Platforms.Default
 					case SDL.SDL_EventType.SDL_KEYUP:
 					{
 						var keyCode = (Keycode)e.key.keysym.sym;
+
+						// The Android back button opens/closes menus like Escape does on desktop
+						if (e.key.keysym.sym == SDL.SDL_Keycode.SDLK_AC_BACK)
+							keyCode = Keycode.ESCAPE;
+
 						var type = e.type == SDL.SDL_EventType.SDL_KEYDOWN ?
 							KeyInputEvent.Down : KeyInputEvent.Up;
 
@@ -247,6 +283,8 @@ namespace OpenRA.Platforms.Default
 
 			if (pendingMotion != null)
 				inputHandler.OnMouseInput(pendingMotion.Value);
+
+			touchGestures?.Update(inputHandler, mods);
 		}
 	}
 }

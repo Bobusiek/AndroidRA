@@ -49,6 +49,13 @@ namespace OpenRA
 			//   (a) loading duplicate data into the application domain, breaking the world.
 			//   (b) crashing if the assembly has already been loaded.
 			// We can't check the internal name of the assembly, so we'll work off the data instead
+			// Assemblies may be bundled inside the application package (e.g. Android) instead of existing as loose files.
+			if (!File.Exists(resolvedPath))
+			{
+				assemblyList.Add(Support.AssemblyLoader.LoadBundledAssembly(resolvedPath));
+				return;
+			}
+
 			string hash;
 			using (var stream = File.OpenRead(resolvedPath))
 				hash = CryptoUtil.SHA1Hash(stream);

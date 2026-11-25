@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<!-- OpenGL ES 3.0 is required by OpenRA's Embedded renderer -->
+	<uses-feature android:glEsVersion="0x00030000" android:required="true" />
+	<uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+	<uses-feature android:name="android.hardware.gamepad" android:required="false" />
+
+	<!-- Multiplayer, content downloads and the master server -->
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+	<application
+		android:label="AndroidRA"
+		android:icon="@mipmap/ic_launcher"
+		android:hardwareAccelerated="true"
+		android:allowBackup="false"
+		android:extractNativeLibs="true">
+
+		<activity
+			android:name="org.openra.OpenRAActivity"
+			android:exported="true"
+			android:label="AndroidRA"
+			android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+			android:screenOrientation="sensorLandscape"
+			android:launchMode="singleInstance"
+			android:windowSoftInputMode="adjustPan"
+			android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+			android:preferMinimalPostProcessing="true">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+			</intent-filter>
+		</activity>
+	</application>
+</manifest>

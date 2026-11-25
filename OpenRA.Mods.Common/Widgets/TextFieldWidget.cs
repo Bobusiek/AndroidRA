@@ -78,6 +78,8 @@ namespace OpenRA.Mods.Common.Widgets
 
 		public TextFieldWidget() { }
 
+		public override bool WantsTextInput => !IsDisabled();
+
 		protected TextFieldWidget(TextFieldWidget widget)
 			: base(widget)
 		{

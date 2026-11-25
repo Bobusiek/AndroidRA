@@ -37,6 +37,10 @@ namespace OpenRA.Platforms.Default
 		int2? lockedMousePosition;
 		float scaleModifier;
 		readonly GLProfile profile;
+
+		bool? hasScreenKeyboard;
+		bool textInputWanted;
+		bool screenKeyboardShown;
 		readonly GLProfile[] supportedProfiles;
 
 		internal IntPtr Window
@@ -149,9 +153,15 @@ namespace OpenRA.Platforms.Default
 				// Prefer standard GL over GLES provided by the native driver
 				var testProfiles = new List<GLProfile> { GLProfile.ANGLE, GLProfile.Modern, GLProfile.Embedded };
 				var errorLog = new List<string>();
-				supportedProfiles = testProfiles
-					.Where(profile => CanCreateGLWindow(profile, errorLog))
-					.ToArray();
+
+				// Android only provides GLES and a single native window, so probing with throwaway windows is
+				// both unnecessary and unsafe (the SDL Android backend does not support re-creating its surface here)
+				if (OperatingSystem.IsAndroid())
+					supportedProfiles = [GLProfile.Embedded];
+				else
+					supportedProfiles = testProfiles
+						.Where(profile => CanCreateGLWindow(profile, errorLog))
+						.ToArray();
 
 				if (supportedProfiles.Length == 0)
 				{
@@ -162,6 +172,14 @@ namespace OpenRA.Platforms.Default
 				}
 
 				profile = supportedProfiles.Contains(requestProfile) ? requestProfile : supportedProfiles[0];
+
+				// Touch input is translated by TouchGestures; stop SDL from also synthesizing mouse events
+				// from touches (and touches from a connected mouse), which would duplicate every input.
+				if (OperatingSystem.IsAndroid())
+				{
+					SDL.SDL_SetHint(SDL.SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+					SDL.SDL_SetHint(SDL.SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+				}
 
 				// Note: This must be called after the CanCreateGLWindow checks above,
 				// which needs to create and destroy its own SDL contexts as a workaround for specific buggy drivers
@@ -186,6 +204,14 @@ namespace OpenRA.Platforms.Default
 					if (scaleVariable == null || !float.TryParse(scaleVariable, NumberStyles.Float, NumberFormatInfo.InvariantInfo, out windowScale) || windowScale <= 0)
 						if (SDL.SDL_GetDisplayDPI(videoDisplay, out var ddpi, out _, out _) == 0)
 							windowScale = ddpi / 96;
+				}
+				else if (OperatingSystem.IsAndroid())
+				{
+					// The Android launcher may pass OPENRA_DISPLAY_SCALE; otherwise render at native pixels
+					// and leave UI scaling to the in-game Graphics.UIScale setting.
+					var scaleVariable = Environment.GetEnvironmentVariable("OPENRA_DISPLAY_SCALE");
+					if (scaleVariable == null || !float.TryParse(scaleVariable, NumberStyles.Float, NumberFormatInfo.InvariantInfo, out windowScale) || windowScale <= 0)
+						windowScale = 1;
 				}
 				else if (Platform.CurrentPlatform == PlatformType.Linux)
 				{
@@ -215,7 +241,9 @@ namespace OpenRA.Platforms.Default
 				}
 
 				Console.WriteLine($"Desktop resolution: {display.w}x{display.h}");
-				if (requestEffectiveWindowSize.Width == 0 && requestEffectiveWindowSize.Height == 0)
+
+				// Android apps always fill the whole screen
+				if (OperatingSystem.IsAndroid() || (requestEffectiveWindowSize.Width == 0 && requestEffectiveWindowSize.Height == 0))
 				{
 					Console.WriteLine("No custom resolution provided, using desktop resolution");
 					surfaceSize = windowSize = new Size(display.w, display.h);
@@ -506,6 +534,59 @@ namespace OpenRA.Platforms.Default
 		{
 			VerifyThreadAffinity();
 			return Sdl2Input.GetClipboardText();
+		}
+
+		public bool UpdateTextInput(bool wanted, Rectangle inputArea)
+		{
+			VerifyThreadAffinity();
+
+			// SDL enables text input permanently on platforms without an on-screen keyboard
+			hasScreenKeyboard ??= SDL.SDL_HasScreenKeyboardSupport() == SDL.SDL_bool.SDL_TRUE;
+			if (!hasScreenKeyboard.Value)
+				return true;
+
+			if (wanted != textInputWanted)
+			{
+				textInputWanted = wanted;
+				screenKeyboardShown = false;
+				if (wanted)
+				{
+					// Tell the OS where the field is (in window pixels) so it can keep it visible above the keyboard
+					var scale = EffectiveWindowScale;
+					var rect = new SDL.SDL_Rect
+					{
+						x = (int)(inputArea.X * scale),
+						y = (int)(inputArea.Y * scale),
+						w = (int)(inputArea.Width * scale),
+						h = (int)(inputArea.Height * scale)
+					};
+
+					SDL.SDL_SetTextInputRect(ref rect);
+					SDL.SDL_StartTextInput();
+				}
+				else
+					SDL.SDL_StopTextInput();
+
+				return true;
+			}
+
+			if (!wanted)
+				return true;
+
+			// The keyboard appears asynchronously, so only treat it as dismissed once it has actually been shown
+			if (SDL.SDL_IsScreenKeyboardShown(window) == SDL.SDL_bool.SDL_TRUE)
+			{
+				screenKeyboardShown = true;
+				return true;
+			}
+
+			if (!screenKeyboardShown)
+				return true;
+
+			textInputWanted = false;
+			screenKeyboardShown = false;
+			SDL.SDL_StopTextInput();
+			return false;
 		}
 
 		public bool SetClipboardText(string text)

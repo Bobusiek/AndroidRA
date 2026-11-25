@@ -76,13 +76,15 @@ namespace OpenRA
 			var token = (CancellationToken)obj;
 			var reader = Channel.Reader;
 
-			while (!token.IsCancellationRequested)
+			// Block until messages arrive instead of polling every millisecond,
+			// which wasted a noticeable amount of CPU (and battery on mobile devices) while idle.
+			try
 			{
-				while (reader.TryRead(out var item))
-					WriteValue(item);
-
-				Thread.Sleep(1);
+				while (reader.WaitToReadAsync(token).AsTask().GetAwaiter().GetResult())
+					while (reader.TryRead(out var item))
+						WriteValue(item);
 			}
+			catch (OperationCanceledException) { }
 
 			while (reader.TryRead(out var item))
 				WriteValue(item);

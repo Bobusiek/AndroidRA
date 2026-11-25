@@ -770,6 +770,11 @@ namespace OpenRA.Platforms.Default
 		{
 			string error;
 
+			// Performance hints are not errors. Some drivers (e.g. ARM Mali) report them with high severity
+			// for routine operations, and building a stack trace for each one every frame is expensive.
+			if (type == GL_DEBUG_TYPE_PERFORMANCE)
+				return;
+
 			switch (severity)
 			{
 				case GL_DEBUG_SEVERITY_HIGH:

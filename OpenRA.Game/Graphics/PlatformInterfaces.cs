@@ -77,6 +77,13 @@ namespace OpenRA
 		void SetRelativeMouseMode(bool mode);
 		void SetScaleModifier(float scale);
 
+		/// <summary>
+		/// Enables or disables text input, which shows or hides the on-screen keyboard on devices that use one.
+		/// <paramref name="inputArea"/> is the focused field in effective UI coordinates, so the platform can keep it visible.
+		/// Returns false if the player dismissed an on-screen keyboard while text input was still wanted.
+		/// </summary>
+		bool UpdateTextInput(bool wanted, Rectangle inputArea);
+
 		GLProfile GLProfile { get; }
 
 		GLProfile[] SupportedGLProfiles { get; }

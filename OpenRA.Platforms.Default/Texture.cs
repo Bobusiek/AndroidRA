@@ -147,7 +147,10 @@ namespace OpenRA.Platforms.Default
 
 			PrepareTexture();
 
-			var glInternalFormat = OpenGL.Profile == GLProfile.Embedded ? OpenGL.GL_BGRA : OpenGL.GL_RGBA8;
+			// GL_EXT_texture_format_BGRA8888 only allows BGRA in glTexImage2D/glTexSubImage2D, not as a
+			// glCopyTexImage2D internal format. Some GLES drivers accept it anyway, but strict ones (e.g. ARM Mali)
+			// reject it, so use the unsized RGBA format, which can be copied from any RGBA/BGRA color buffer.
+			var glInternalFormat = OpenGL.Profile == GLProfile.Embedded ? OpenGL.GL_RGBA : OpenGL.GL_RGBA8;
 			OpenGL.glCopyTexImage2D(OpenGL.GL_TEXTURE_2D, 0, glInternalFormat, rect.X, rect.Y, rect.Width, rect.Height, 0);
 			OpenGL.CheckGLError();
 		}

@@ -1,0 +1,139 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+		AndroidRA: unofficial Android launcher for OpenRA.
+
+		Native libraries (SDL2, OpenAL Soft, FreeType, Lua 5.1 and the libmain stub) are not shipped
+		by the desktop NuGet packages for Android and must be built first with:
+		  ./packaging/android/build-native.sh
+		which places them in libs/<abi>/ and copies the matching SDL Java sources into java/org/libsdl/app/.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0-android</TargetFramework>
+		<SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+		<OutputType>Exe</OutputType>
+
+		<!-- Directory.Build.props points every project at ../bin; keep the Android build separate. -->
+		<OutputPath>bin/$(Configuration)/</OutputPath>
+
+		<!-- Prevent the desktop native NuGet targets (keyed on TargetPlatform) from copying linux/windows binaries. -->
+		<TargetPlatform>android</TargetPlatform>
+
+		<ApplicationId>pl.androidra</ApplicationId>
+		<ApplicationTitle>AndroidRA</ApplicationTitle>
+		<ApplicationVersion>1</ApplicationVersion>
+		<ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+
+		<RuntimeIdentifiers Condition="'$(RuntimeIdentifiers)' == ''">android-arm64</RuntimeIdentifiers>
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+
+		<!-- Debug: no trimming or AOT, for fast iteration. -->
+		<PublishTrimmed>false</PublishTrimmed>
+		<AndroidLinkMode>None</AndroidLinkMode>
+		<RunAOTCompilation>false</RunAOTCompilation>
+	</PropertyGroup>
+
+	<!--
+		Release runs on the CoreCLR runtime (experimental on Android in .NET 10). Measured on a Dimensity 6020 phone
+		it starts ~1/3 faster and keeps ~35-40% higher frame rates in large skirmishes than Mono with full AOT,
+		at the cost of ~300 MB more memory. Build with -p:UseMonoRuntime=true to go back to Mono.
+	-->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' And '$(UseMonoRuntime)' == ''">
+		<UseMonoRuntime>false</UseMonoRuntime>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' And '$(UseMonoRuntime)' == 'false'">
+		<!-- Symbols trip up the experimental CoreCLR packaging and are not needed in the APK. -->
+		<DebugType>none</DebugType>
+		<DebugSymbols>false</DebugSymbols>
+	</PropertyGroup>
+
+	<!--
+		Release on Mono: fully AOT-compile all assemblies so low-end devices do not JIT the engine on every launch.
+		AOT requires trimming; "partial" only trims assemblies marked as trimmable (the .NET libraries),
+		and the OpenRA/mod assemblies are additionally rooted because traits and widgets are created via reflection.
+	-->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' And '$(UseMonoRuntime)' == 'true'">
+		<PublishTrimmed>true</PublishTrimmed>
+		<TrimMode>partial</TrimMode>
+		<AndroidLinkMode>SdkOnly</AndroidLinkMode>
+		<RunAOTCompilation>true</RunAOTCompilation>
+		<AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+		<SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(Configuration)' == 'Release' And '$(UseMonoRuntime)' == 'true'">
+		<TrimmerRootAssembly Include="OpenRA.Game" RootMode="All" />
+		<TrimmerRootAssembly Include="OpenRA.Platforms.Default" RootMode="All" />
+		<TrimmerRootAssembly Include="OpenRA.Mods.Common" RootMode="All" />
+		<TrimmerRootAssembly Include="OpenRA.Mods.Cnc" RootMode="All" />
+		<TrimmerRootAssembly Include="OpenRA.Mods.D2k" RootMode="All" />
+	</ItemGroup>
+
+	<PropertyGroup>
+
+		<!-- Always embed assemblies so the APK can be installed and run standalone. -->
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+
+		<!-- Sensible Linux defaults; override with ANDROID_HOME / JAVA_HOME or -p:AndroidSdkDirectory / -p:JavaSdkDirectory.
+		     .NET for Android requires JDK 17 or 21 (newer JDKs are not supported). -->
+		<AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == '' And '$(ANDROID_HOME)' == ''">$(HOME)/Android/Sdk</AndroidSdkDirectory>
+		<JavaSdkDirectory Condition="'$(JavaSdkDirectory)' == '' And Exists('/usr/lib/jvm/java-17-openjdk')">/usr/lib/jvm/java-17-openjdk</JavaSdkDirectory>
+
+		<!-- XML docs are not useful for an app project. -->
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+		<NoWarn>$(NoWarn);CS1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Mod assemblies are listed by file name in mod.yaml; referencing them bundles them into the APK,
+		     where OpenRA.Game falls back to loading them by assembly name. -->
+		<ProjectReference Include="..\OpenRA.Game\OpenRA.Game.csproj" />
+		<ProjectReference Include="..\OpenRA.Platforms.Default\OpenRA.Platforms.Default.csproj" />
+		<ProjectReference Include="..\OpenRA.Mods.Common\OpenRA.Mods.Common.csproj" />
+		<ProjectReference Include="..\OpenRA.Mods.Cnc\OpenRA.Mods.Cnc.csproj" />
+		<ProjectReference Include="..\OpenRA.Mods.D2k\OpenRA.Mods.D2k.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- SDL's Java glue and our activity are plain Java; we do not need C# bindings for them. -->
+		<!-- Prebuilt native libraries in libs/<abi>/*.so are picked up by the default AndroidNativeLibrary glob;
+		     the ABI is inferred from the parent directory name (e.g. arm64-v8a). -->
+		<AndroidJavaSource Update="java/**/*.java" Bind="false" />
+
+		<!-- Mono GC tuning: a larger nursery means fewer minor collections (and stutters) during games. -->
+		<AndroidEnvironment Include="environment.txt" />
+	</ItemGroup>
+
+	<!-- Engine data (mods, shaders, metadata) is packed into a single zip asset and extracted on first launch. -->
+	<PropertyGroup>
+		<EngineDataMods>common;common-content;ra;ra-content;cnc;cnc-content;d2k;d2k-content</EngineDataMods>
+	</PropertyGroup>
+
+	<Target Name="PackEngineData" BeforeTargets="BeforeBuild">
+		<!-- IntermediateOutputPath is only defined once the SDK targets are imported, so resolve paths inside the target. -->
+		<PropertyGroup>
+			<EngineDataStagingDir>$(IntermediateOutputPath)engine-data/</EngineDataStagingDir>
+			<EngineDataZip>$(IntermediateOutputPath)engine.zip</EngineDataZip>
+		</PropertyGroup>
+
+		<ItemGroup>
+			<_EngineModName Include="$(EngineDataMods)" />
+			<_EngineRootFile Include="$(EngineRootPath)/VERSION;$(EngineRootPath)/AUTHORS;$(EngineRootPath)/COPYING;$(EngineRootPath)/global mix database.dat" />
+			<_EngineRootFile Include="$(EngineRootPath)/IP2LOCATION-LITE-DB1.IPV6.BIN.ZIP" Condition="Exists('$(EngineRootPath)/IP2LOCATION-LITE-DB1.IPV6.BIN.ZIP')" />
+			<!-- Licenses of the bundled third-party native libraries must ship with the APK -->
+			<_EngineRootFile Include="THIRD-PARTY-NOTICES.md;licenses/*.txt" />
+			<_EngineGlslFile Include="$(EngineRootPath)/glsl/**/*" />
+			<_EngineModFile Include="$(EngineRootPath)/mods/%(_EngineModName.Identity)/**/*" ModName="%(_EngineModName.Identity)" />
+		</ItemGroup>
+
+		<RemoveDir Directories="$(EngineDataStagingDir)" />
+		<Copy SourceFiles="@(_EngineRootFile)" DestinationFolder="$(EngineDataStagingDir)" />
+		<Copy SourceFiles="@(_EngineGlslFile)" DestinationFolder="$(EngineDataStagingDir)glsl/%(RecursiveDir)" />
+		<Copy SourceFiles="@(_EngineModFile)" DestinationFolder="$(EngineDataStagingDir)mods/%(ModName)/%(RecursiveDir)" />
+		<ZipDirectory SourceDirectory="$(EngineDataStagingDir)" DestinationFile="$(EngineDataZip)" Overwrite="true" />
+
+		<ItemGroup>
+			<AndroidAsset Include="$(EngineDataZip)" LogicalName="engine.zip" />
+		</ItemGroup>
+	</Target>
+</Project>

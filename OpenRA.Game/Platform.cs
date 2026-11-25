@@ -42,6 +42,10 @@ namespace OpenRA
 			if (Environment.OSVersion.Platform == PlatformID.Win32NT)
 				return PlatformType.Windows;
 
+			// Android is Linux-based but does not allow spawning uname from an app sandbox.
+			if (System.OperatingSystem.IsAndroid())
+				return PlatformType.Linux;
+
 			try
 			{
 				var psi = new ProcessStartInfo("uname", "-s")

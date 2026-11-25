@@ -380,6 +380,12 @@ namespace OpenRA.Widgets
 				Ui.MouseFocusWidget = null;
 		}
 
+		/// <summary>
+		/// True if this widget accepts typed text while it has keyboard focus.
+		/// Used to show an on-screen keyboard on devices without a physical one.
+		/// </summary>
+		public virtual bool WantsTextInput => false;
+
 		public virtual bool TakeKeyboardFocus()
 		{
 			if (HasKeyboardFocus)
